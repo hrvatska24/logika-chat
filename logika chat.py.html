@@ -1,0 +1,376 @@
+<html>
+<head>
+<title>logika chat.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #6aab73;}
+.s4 { color: #7a7e85;}
+.s5 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+logika chat.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">customtkinter </span><span class="s0">as </span><span class="s1">ctk</span>
+<span class="s0">from </span><span class="s1">socket </span><span class="s0">import </span><span class="s1">socket</span><span class="s2">, </span><span class="s1">AF_INET</span><span class="s2">, </span><span class="s1">SOCK_STREAM</span><span class="s2">, </span><span class="s1">error </span><span class="s0">as </span><span class="s1">socket_error</span><span class="s2">, </span><span class="s1">SOL_SOCKET</span><span class="s2">, </span><span class="s1">SO_REUSEADDR</span>
+<span class="s0">import </span><span class="s1">threading</span>
+<span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">import </span><span class="s1">time</span>
+
+
+<span class="s0">class </span><span class="s1">ChatClient</span><span class="s2">:</span>
+    <span class="s0">def </span><span class="s1">__init__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s1">ctk</span><span class="s2">.</span><span class="s1">set_appearance_mode</span><span class="s2">(</span><span class="s3">&quot;System&quot;</span><span class="s2">)</span>
+        <span class="s1">ctk</span><span class="s2">.</span><span class="s1">set_default_color_theme</span><span class="s2">(</span><span class="s3">&quot;green&quot;</span><span class="s2">)</span>
+
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">sock </span><span class="s2">= </span><span class="s0">None</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">username </span><span class="s2">= </span><span class="s3">&quot;&quot;</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">app </span><span class="s2">= </span><span class="s0">None</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">output_box </span><span class="s2">= </span><span class="s0">None</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">message_entry </span><span class="s2">= </span><span class="s0">None</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">after_id </span><span class="s2">= </span><span class="s0">None</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">login_window </span><span class="s2">= </span><span class="s0">None</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">connected </span><span class="s2">= </span><span class="s0">False</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">receive_thread </span><span class="s2">= </span><span class="s0">None</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">running </span><span class="s2">= </span><span class="s0">True</span>
+        <span class="s4"># ОНОВІТЬ ЦІ ДАНІ! Замість ngrok.io може бути &quot;127.0.0.1&quot; для локального сервера.</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">server_address </span><span class="s2">= (</span><span class="s3">&quot;2.tcp.eu.ngrok.io&quot;</span><span class="s2">, </span><span class="s5">16963</span><span class="s2">)  </span><span class="s4"># Приклад адреси ngrok</span>
+
+    <span class="s0">def </span><span class="s1">launch_login_window</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s0">def </span><span class="s1">submit_nickname</span><span class="s2">():</span>
+            <span class="s1">nick </span><span class="s2">= </span><span class="s1">nickname_entry</span><span class="s2">.</span><span class="s1">get</span><span class="s2">().</span><span class="s1">strip</span><span class="s2">()</span>
+            <span class="s0">if </span><span class="s1">nick</span><span class="s2">:</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">username </span><span class="s2">= </span><span class="s1">nick</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">.</span><span class="s1">withdraw</span><span class="s2">()</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">open_chat_window</span><span class="s2">()</span>
+            <span class="s0">else</span><span class="s2">:</span>
+                <span class="s1">print</span><span class="s2">(</span><span class="s3">&quot;Будь ласка, введіть свій нік.&quot;</span><span class="s2">)</span>
+
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">login_window </span><span class="s2">= </span><span class="s1">ctk</span><span class="s2">.</span><span class="s1">CTk</span><span class="s2">()</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">.</span><span class="s1">geometry</span><span class="s2">(</span><span class="s3">&quot;300x150&quot;</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">.</span><span class="s1">title</span><span class="s2">(</span><span class="s3">&quot;Вхід у чат&quot;</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">.</span><span class="s1">resizable</span><span class="s2">(</span><span class="s0">False</span><span class="s2">, </span><span class="s0">False</span><span class="s2">)</span>
+
+        <span class="s1">ctk</span><span class="s2">.</span><span class="s1">CTkLabel</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">, </span><span class="s1">text</span><span class="s2">=</span><span class="s3">&quot;Введіть свій нік:&quot;</span><span class="s2">).</span><span class="s1">pack</span><span class="s2">(</span><span class="s1">pady</span><span class="s2">=(</span><span class="s5">20</span><span class="s2">, </span><span class="s5">5</span><span class="s2">))</span>
+        <span class="s1">nickname_entry </span><span class="s2">= </span><span class="s1">ctk</span><span class="s2">.</span><span class="s1">CTkEntry</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">)</span>
+        <span class="s1">nickname_entry</span><span class="s2">.</span><span class="s1">pack</span><span class="s2">(</span><span class="s1">pady</span><span class="s2">=</span><span class="s5">5</span><span class="s2">)</span>
+        <span class="s1">nickname_entry</span><span class="s2">.</span><span class="s1">bind</span><span class="s2">(</span><span class="s3">&quot;&lt;Return&gt;&quot;</span><span class="s2">, </span><span class="s0">lambda </span><span class="s1">event</span><span class="s2">=</span><span class="s0">None</span><span class="s2">: </span><span class="s1">submit_nickname</span><span class="s2">())</span>
+
+        <span class="s1">ctk</span><span class="s2">.</span><span class="s1">CTkButton</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">, </span><span class="s1">text</span><span class="s2">=</span><span class="s3">&quot;Увійти&quot;</span><span class="s2">, </span><span class="s1">command</span><span class="s2">=</span><span class="s1">submit_nickname</span><span class="s2">).</span><span class="s1">pack</span><span class="s2">(</span><span class="s1">pady</span><span class="s2">=</span><span class="s5">10</span><span class="s2">)</span>
+
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">.</span><span class="s1">protocol</span><span class="s2">(</span><span class="s3">&quot;WM_DELETE_WINDOW&quot;</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">on_login_close</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">.</span><span class="s1">mainloop</span><span class="s2">()</span>
+
+    <span class="s0">def </span><span class="s1">on_login_close</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">login_window</span><span class="s2">.</span><span class="s1">destroy</span><span class="s2">()</span>
+        <span class="s1">sys</span><span class="s2">.</span><span class="s1">exit</span><span class="s2">()</span>
+
+    <span class="s0">def </span><span class="s1">open_chat_window</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">app </span><span class="s2">= </span><span class="s1">ctk</span><span class="s2">.</span><span class="s1">CTk</span><span class="s2">()</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">geometry</span><span class="s2">(</span><span class="s3">&quot;500x500&quot;</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">title</span><span class="s2">(</span><span class="s3">f&quot;LogiTalk | </span><span class="s0">{</span><span class="s1">self</span><span class="s2">.</span><span class="s1">username</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">resizable</span><span class="s2">(</span><span class="s0">False</span><span class="s2">, </span><span class="s0">False</span><span class="s2">)</span>
+
+        <span class="s1">label </span><span class="s2">= </span><span class="s1">ctk</span><span class="s2">.</span><span class="s1">CTkLabel</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">, </span><span class="s1">text</span><span class="s2">=</span><span class="s3">&quot;Ласкаво просимо до LogiTalk&quot;</span><span class="s2">)</span>
+        <span class="s1">label</span><span class="s2">.</span><span class="s1">pack</span><span class="s2">(</span><span class="s1">pady</span><span class="s2">=</span><span class="s5">20</span><span class="s2">)</span>
+
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">output_box </span><span class="s2">= </span><span class="s1">ctk</span><span class="s2">.</span><span class="s1">CTkTextbox</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">, </span><span class="s1">width</span><span class="s2">=</span><span class="s5">480</span><span class="s2">, </span><span class="s1">height</span><span class="s2">=</span><span class="s5">300</span><span class="s2">, </span><span class="s1">state</span><span class="s2">=</span><span class="s3">&quot;disabled&quot;</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">output_box</span><span class="s2">.</span><span class="s1">pack</span><span class="s2">(</span><span class="s1">pady</span><span class="s2">=</span><span class="s5">10</span><span class="s2">, </span><span class="s1">padx</span><span class="s2">=</span><span class="s5">10</span><span class="s2">, </span><span class="s1">fill</span><span class="s2">=</span><span class="s3">&quot;both&quot;</span><span class="s2">, </span><span class="s1">expand</span><span class="s2">=</span><span class="s0">True</span><span class="s2">)</span>
+
+        <span class="s1">input_frame </span><span class="s2">= </span><span class="s1">ctk</span><span class="s2">.</span><span class="s1">CTkFrame</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">)</span>
+        <span class="s1">input_frame</span><span class="s2">.</span><span class="s1">pack</span><span class="s2">(</span><span class="s1">pady</span><span class="s2">=</span><span class="s5">5</span><span class="s2">, </span><span class="s1">padx</span><span class="s2">=</span><span class="s5">10</span><span class="s2">, </span><span class="s1">fill</span><span class="s2">=</span><span class="s3">&quot;x&quot;</span><span class="s2">)</span>
+
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">message_entry </span><span class="s2">= </span><span class="s1">ctk</span><span class="s2">.</span><span class="s1">CTkEntry</span><span class="s2">(</span><span class="s1">input_frame</span><span class="s2">, </span><span class="s1">placeholder_text</span><span class="s2">=</span><span class="s3">&quot;Повідомлення&quot;</span><span class="s2">, </span><span class="s1">width</span><span class="s2">=</span><span class="s5">380</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">message_entry</span><span class="s2">.</span><span class="s1">pack</span><span class="s2">(</span><span class="s1">side</span><span class="s2">=</span><span class="s3">&quot;left&quot;</span><span class="s2">, </span><span class="s1">fill</span><span class="s2">=</span><span class="s3">&quot;x&quot;</span><span class="s2">, </span><span class="s1">expand</span><span class="s2">=</span><span class="s0">True</span><span class="s2">, </span><span class="s1">padx</span><span class="s2">=(</span><span class="s5">0</span><span class="s2">, </span><span class="s5">5</span><span class="s2">))</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">message_entry</span><span class="s2">.</span><span class="s1">bind</span><span class="s2">(</span><span class="s3">&quot;&lt;Return&gt;&quot;</span><span class="s2">, </span><span class="s0">lambda </span><span class="s1">event</span><span class="s2">=</span><span class="s0">None</span><span class="s2">: </span><span class="s1">self</span><span class="s2">.</span><span class="s1">send_message</span><span class="s2">())</span>
+
+        <span class="s1">send_button </span><span class="s2">= </span><span class="s1">ctk</span><span class="s2">.</span><span class="s1">CTkButton</span><span class="s2">(</span><span class="s1">input_frame</span><span class="s2">, </span><span class="s1">text</span><span class="s2">=</span><span class="s3">&quot;Надіслати&quot;</span><span class="s2">, </span><span class="s1">command</span><span class="s2">=</span><span class="s1">self</span><span class="s2">.</span><span class="s1">send_message</span><span class="s2">, </span><span class="s1">width</span><span class="s2">=</span><span class="s5">90</span><span class="s2">)</span>
+        <span class="s1">send_button</span><span class="s2">.</span><span class="s1">pack</span><span class="s2">(</span><span class="s1">side</span><span class="s2">=</span><span class="s3">&quot;right&quot;</span><span class="s2">)</span>
+
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">sock </span><span class="s2">= </span><span class="s1">socket</span><span class="s2">(</span><span class="s1">AF_INET</span><span class="s2">, </span><span class="s1">SOCK_STREAM</span><span class="s2">)</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">.</span><span class="s1">connect</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">server_address</span><span class="s2">)</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">connected </span><span class="s2">= </span><span class="s0">True</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">running </span><span class="s2">= </span><span class="s0">True</span>
+
+            <span class="s4"># Надсилаємо серверу повідомлення про приєднання</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">.</span><span class="s1">send</span><span class="s2">(</span><span class="s3">f&quot;JOIN@</span><span class="s0">{</span><span class="s1">self</span><span class="s2">.</span><span class="s1">username</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">.</span><span class="s1">encode</span><span class="s2">(</span><span class="s3">'utf-8'</span><span class="s2">))</span>
+
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">receive_thread </span><span class="s2">= </span><span class="s1">threading</span><span class="s2">.</span><span class="s1">Thread</span><span class="s2">(</span><span class="s1">target</span><span class="s2">=</span><span class="s1">self</span><span class="s2">.</span><span class="s1">recv_message</span><span class="s2">, </span><span class="s1">daemon</span><span class="s2">=</span><span class="s0">True</span><span class="s2">)</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">receive_thread</span><span class="s2">.</span><span class="s1">start</span><span class="s2">()</span>
+
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">(</span>
+                <span class="s3">f&quot;[СИСТЕМА] Підключено до сервера: </span><span class="s0">{</span><span class="s1">self</span><span class="s2">.</span><span class="s1">server_address</span><span class="s2">[</span><span class="s5">0</span><span class="s2">]</span><span class="s0">}</span><span class="s3">:</span><span class="s0">{</span><span class="s1">self</span><span class="s2">.</span><span class="s1">server_address</span><span class="s2">[</span><span class="s5">1</span><span class="s2">]</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)</span>
+        <span class="s0">except </span><span class="s2">(</span><span class="s1">socket_error</span><span class="s2">, </span><span class="s1">Exception</span><span class="s2">) </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">(</span><span class="s3">f&quot;[ПОМИЛКА] Не вдалося підключитися до сервера: </span><span class="s0">{</span><span class="s1">e</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">cleanup_socket</span><span class="s2">()</span>
+            <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">:</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">after</span><span class="s2">(</span><span class="s5">100</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">destroy</span><span class="s2">)</span>
+            <span class="s1">sys</span><span class="s2">.</span><span class="s1">exit</span><span class="s2">()</span>
+
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">schedule_adaptive_ui</span><span class="s2">()</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">protocol</span><span class="s2">(</span><span class="s3">&quot;WM_DELETE_WINDOW&quot;</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">on_close</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">mainloop</span><span class="s2">()</span>
+
+    <span class="s0">def </span><span class="s1">schedule_adaptive_ui</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">winfo_exists</span><span class="s2">():</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">after_id </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">after</span><span class="s2">(</span><span class="s5">1000</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">adaptive_ui</span><span class="s2">)</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">after_id </span><span class="s2">= </span><span class="s0">None</span>
+
+    <span class="s0">def </span><span class="s1">adaptive_ui</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">winfo_exists</span><span class="s2">():</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">schedule_adaptive_ui</span><span class="s2">()</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">after_id </span><span class="s2">= </span><span class="s0">None</span>
+
+    <span class="s0">def </span><span class="s1">_safe_add_message</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">message</span><span class="s2">):</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">output_box </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">output_box</span><span class="s2">.</span><span class="s1">winfo_exists</span><span class="s2">():</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">output_box</span><span class="s2">.</span><span class="s1">configure</span><span class="s2">(</span><span class="s1">state</span><span class="s2">=</span><span class="s3">&quot;normal&quot;</span><span class="s2">)</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">output_box</span><span class="s2">.</span><span class="s1">insert</span><span class="s2">(</span><span class="s3">&quot;end&quot;</span><span class="s2">, </span><span class="s1">message </span><span class="s2">+ </span><span class="s3">&quot;</span><span class="s0">\n</span><span class="s3">&quot;</span><span class="s2">)</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">output_box</span><span class="s2">.</span><span class="s1">configure</span><span class="s2">(</span><span class="s1">state</span><span class="s2">=</span><span class="s3">&quot;disabled&quot;</span><span class="s2">)</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">output_box</span><span class="s2">.</span><span class="s1">see</span><span class="s2">(</span><span class="s3">&quot;end&quot;</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">add_message</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">message</span><span class="s2">):</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">(</span><span class="s1">message</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">send_message</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s0">if not </span><span class="s1">self</span><span class="s2">.</span><span class="s1">connected </span><span class="s0">or not </span><span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">(</span><span class="s3">&quot;[ПОМИЛКА] Не підключено до сервера.&quot;</span><span class="s2">)</span>
+            <span class="s0">return</span>
+
+        <span class="s1">message_content </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">message_entry</span><span class="s2">.</span><span class="s1">get</span><span class="s2">().</span><span class="s1">strip</span><span class="s2">()</span>
+        <span class="s0">if not </span><span class="s1">message_content</span><span class="s2">:</span>
+            <span class="s0">return</span>
+
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s4"># Надсилаємо просте текстове повідомлення</span>
+            <span class="s1">full_message_to_send </span><span class="s2">= </span><span class="s3">f&quot;</span><span class="s0">{</span><span class="s1">self</span><span class="s2">.</span><span class="s1">username</span><span class="s0">}</span><span class="s3">: </span><span class="s0">{</span><span class="s1">message_content</span><span class="s0">}</span><span class="s3">&quot;</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">.</span><span class="s1">send</span><span class="s2">(</span><span class="s1">full_message_to_send</span><span class="s2">.</span><span class="s1">encode</span><span class="s2">(</span><span class="s3">'utf-8'</span><span class="s2">))</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">(</span><span class="s3">f&quot;</span><span class="s0">{</span><span class="s1">self</span><span class="s2">.</span><span class="s1">username</span><span class="s0">}</span><span class="s3">: </span><span class="s0">{</span><span class="s1">message_content</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)  </span><span class="s4"># Відображаємо своє повідомлення</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">message_entry</span><span class="s2">.</span><span class="s1">delete</span><span class="s2">(</span><span class="s5">0</span><span class="s2">, </span><span class="s3">&quot;end&quot;</span><span class="s2">)</span>
+        <span class="s0">except </span><span class="s1">socket_error </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">(</span><span class="s3">f&quot;[ПОМИЛКА] Не вдалося надіслати повідомлення: </span><span class="s0">{</span><span class="s1">e</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">on_connection_lost</span><span class="s2">()</span>
+        <span class="s0">except </span><span class="s1">Exception </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">(</span><span class="s3">f&quot;[ПОМИЛКА] Невідома помилка при надсиланні: </span><span class="s0">{</span><span class="s1">e</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">on_connection_lost</span><span class="s2">()</span>
+
+    <span class="s0">def </span><span class="s1">recv_message</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s0">while </span><span class="s1">self</span><span class="s2">.</span><span class="s1">running </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">connected </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">:</span>
+            <span class="s0">try</span><span class="s2">:</span>
+                <span class="s1">data </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">.</span><span class="s1">recv</span><span class="s2">(</span><span class="s5">1024</span><span class="s2">)</span>
+                <span class="s0">if not </span><span class="s1">data</span><span class="s2">:</span>
+                    <span class="s0">raise </span><span class="s1">socket_error</span><span class="s2">(</span><span class="s3">&quot;Сервер закрив з'єднання&quot;</span><span class="s2">)</span>
+
+                <span class="s1">message </span><span class="s2">= </span><span class="s1">data</span><span class="s2">.</span><span class="s1">decode</span><span class="s2">(</span><span class="s3">'utf-8'</span><span class="s2">).</span><span class="s1">strip</span><span class="s2">()</span>
+                <span class="s4"># Просто відображаємо отримане повідомлення, оскільки це простий текст</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">after</span><span class="s2">(</span><span class="s5">0</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">, </span><span class="s1">message</span><span class="s2">)</span>
+
+            <span class="s0">except </span><span class="s1">socket_error </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+                <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">running</span><span class="s2">:</span>
+                    <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">after</span><span class="s2">(</span><span class="s5">0</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">, </span><span class="s3">f&quot;[СИСТЕМА] З'єднання втрачено: </span><span class="s0">{</span><span class="s1">e</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)</span>
+                    <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">after</span><span class="s2">(</span><span class="s5">0</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">on_connection_lost</span><span class="s2">)</span>
+                <span class="s0">break</span>
+            <span class="s0">except </span><span class="s1">Exception </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+                <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">running</span><span class="s2">:</span>
+                    <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">after</span><span class="s2">(</span><span class="s5">0</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">, </span><span class="s3">f&quot;[ПОМИЛКА] Помилка отримання: </span><span class="s0">{</span><span class="s1">e</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)</span>
+                    <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">after</span><span class="s2">(</span><span class="s5">0</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">on_connection_lost</span><span class="s2">)</span>
+                <span class="s0">break</span>
+
+    <span class="s0">def </span><span class="s1">on_connection_lost</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">connected </span><span class="s2">= </span><span class="s0">False</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">running </span><span class="s2">= </span><span class="s0">False</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">:</span>
+            <span class="s0">try</span><span class="s2">:</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">.</span><span class="s1">shutdown</span><span class="s2">(</span><span class="s5">2</span><span class="s2">)</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">.</span><span class="s1">close</span><span class="s2">()</span>
+            <span class="s0">except </span><span class="s1">socket_error </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+                <span class="s1">print</span><span class="s2">(</span><span class="s3">f&quot;Error closing socket on connection lost: </span><span class="s0">{</span><span class="s1">e</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)</span>
+            <span class="s0">finally</span><span class="s2">:</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">sock </span><span class="s2">= </span><span class="s0">None</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">winfo_exists</span><span class="s2">():</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">after</span><span class="s2">(</span><span class="s5">0</span><span class="s2">, </span><span class="s0">lambda</span><span class="s2">: </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_safe_add_message</span><span class="s2">(</span><span class="s3">&quot;[СИСТЕМА] Ви були відключені від чату.&quot;</span><span class="s2">))</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s1">print</span><span class="s2">(</span><span class="s3">&quot;[СИСТЕМА] Ви були відключені від чату. Вікно вже закрите.&quot;</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">cleanup_socket</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">connected </span><span class="s2">= </span><span class="s0">False</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">running </span><span class="s2">= </span><span class="s0">False</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">:</span>
+            <span class="s0">try</span><span class="s2">:</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">.</span><span class="s1">shutdown</span><span class="s2">(</span><span class="s5">2</span><span class="s2">)</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">.</span><span class="s1">close</span><span class="s2">()</span>
+            <span class="s0">except </span><span class="s1">socket_error </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+                <span class="s1">print</span><span class="s2">(</span><span class="s3">f&quot;Error during socket cleanup: </span><span class="s0">{</span><span class="s1">e</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)</span>
+            <span class="s0">finally</span><span class="s2">:</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">sock </span><span class="s2">= </span><span class="s0">None</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">receive_thread </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">receive_thread</span><span class="s2">.</span><span class="s1">is_alive</span><span class="s2">():</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">receive_thread</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span><span class="s1">timeout</span><span class="s2">=</span><span class="s5">1.0</span><span class="s2">)</span>
+            <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">receive_thread</span><span class="s2">.</span><span class="s1">is_alive</span><span class="s2">():</span>
+                <span class="s1">print</span><span class="s2">(</span><span class="s3">&quot;Потік отримання не завершився вчасно.&quot;</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">on_close</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">running </span><span class="s2">= </span><span class="s0">False</span>
+
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">after_id </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">winfo_exists</span><span class="s2">():</span>
+            <span class="s0">try</span><span class="s2">:</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">after_cancel</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">after_id</span><span class="s2">)</span>
+            <span class="s0">except </span><span class="s1">ctk</span><span class="s2">.</span><span class="s1">TclError</span><span class="s2">:</span>
+                <span class="s0">pass</span>
+            <span class="s0">finally</span><span class="s2">:</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">after_id </span><span class="s2">= </span><span class="s0">None</span>
+
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">connected </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">username </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">:</span>
+            <span class="s0">try</span><span class="s2">:</span>
+                <span class="s4"># Надсилаємо просте текстове повідомлення про вихід</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">sock</span><span class="s2">.</span><span class="s1">send</span><span class="s2">(</span><span class="s3">f&quot;LEAVE@</span><span class="s0">{</span><span class="s1">self</span><span class="s2">.</span><span class="s1">username</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">.</span><span class="s1">encode</span><span class="s2">(</span><span class="s3">'utf-8'</span><span class="s2">))</span>
+                <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s5">0.1</span><span class="s2">)</span>
+            <span class="s0">except </span><span class="s1">Exception </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+                <span class="s1">print</span><span class="s2">(</span><span class="s3">f&quot;Помилка відправки повідомлення про вихід: </span><span class="s0">{</span><span class="s1">e</span><span class="s0">}</span><span class="s3">&quot;</span><span class="s2">)</span>
+
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">cleanup_socket</span><span class="s2">()</span>
+
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">app</span><span class="s2">.</span><span class="s1">destroy</span><span class="s2">()</span>
+
+        <span class="s1">sys</span><span class="s2">.</span><span class="s1">exit</span><span class="s2">(</span><span class="s5">0</span><span class="s2">)</span>
+
+
+<span class="s4"># --- Клас ChatServer (тепер потрібно адаптувати його для простого тексту) ---</span>
+<span class="s4"># Нижче - ПРИКЛАД того, як мав би виглядати ваш ChatServer для роботи з цим спрощеним клієнтом.</span>
+<span class="s4"># Цей код ПОВИНЕН бути у вашому файлі сервера, якщо ви використовуєте окремі файли.</span>
+<span class="s4"># Якщо ви запускаєте все з одного файлу, то розкоментуйте його.</span>
+<span class="s4">#</span>
+<span class="s4"># class ChatServer:</span>
+<span class="s4">#     def __init__(self, host='127.0.0.1', port=55555):</span>
+<span class="s4">#         self.host = host</span>
+<span class="s4">#         self.port = port</span>
+<span class="s4">#         self.server_socket = None</span>
+<span class="s4">#         self.clients = {}  # {socket: username}</span>
+<span class="s4">#         self.lock = threading.Lock()</span>
+<span class="s4">#</span>
+<span class="s4">#     def start(self):</span>
+<span class="s4">#         try:</span>
+<span class="s4">#             self.server_socket = socket(AF_INET, SOCK_STREAM)</span>
+<span class="s4">#             self.server_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)</span>
+<span class="s4">#             self.server_socket.bind((self.host, self.port))</span>
+<span class="s4">#             self.server_socket.listen(5)</span>
+<span class="s4">#             print(f&quot;Сервер слухає на {self.host}:{self.port}&quot;)</span>
+<span class="s4">#</span>
+<span class="s4">#             threading.Thread(target=self.accept_connections, daemon=True).start()</span>
+<span class="s4">#         except socket_error as e:</span>
+<span class="s4">#             print(f&quot;Помилка запуску сервера: {e}&quot;)</span>
+<span class="s4">#             sys.exit(1)</span>
+<span class="s4">#</span>
+<span class="s4">#     def accept_connections(self):</span>
+<span class="s4">#         while True:</span>
+<span class="s4">#             try:</span>
+<span class="s4">#                 client_sock, client_address = self.server_socket.accept()</span>
+<span class="s4">#                 print(f&quot;Підключено нового клієнта: {client_address}&quot;)</span>
+<span class="s4">#                 threading.Thread(target=self.handle_client, args=(client_sock, client_address), daemon=True).start()</span>
+<span class="s4">#             except socket_error as e:</span>
+<span class="s4">#                 print(f&quot;Помилка прийому з'єднання: {e}&quot;)</span>
+<span class="s4">#                 break</span>
+<span class="s4">#             except Exception as e:</span>
+<span class="s4">#                 print(f&quot;Неочікувана помилка прийому з'єднання: {e}&quot;)</span>
+<span class="s4">#                 break</span>
+<span class="s4">#</span>
+<span class="s4">#     def handle_client(self, client_sock, client_address):</span>
+<span class="s4">#         username = &quot;Unknown&quot;</span>
+<span class="s4">#         try:</span>
+<span class="s4">#             while True:</span>
+<span class="s4">#                 data = client_sock.recv(1024)</span>
+<span class="s4">#                 if not data:</span>
+<span class="s4">#                     break</span>
+<span class="s4">#</span>
+<span class="s4">#                 message = data.decode('utf-8').strip()</span>
+<span class="s4">#                 print(f&quot;Отримано від {client_address} ({username}): {message}&quot;)</span>
+<span class="s4">#</span>
+<span class="s4">#                 # Обробка простих текстових повідомлень з префіксами</span>
+<span class="s4">#                 if message.startswith(&quot;JOIN@&quot;):</span>
+<span class="s4">#                     username = message.split(&quot;@&quot;, 1)[1]</span>
+<span class="s4">#                     with self.lock:</span>
+<span class="s4">#                         self.clients[client_sock] = username</span>
+<span class="s4">#                     join_msg = f&quot;[СИСТЕМА] {username} приєднався(лась) до чату!&quot;</span>
+<span class="s4">#                     self.broadcast_message(join_msg.encode('utf-8'), client_sock) # Повідомити інших</span>
+<span class="s4">#                     client_sock.send(f&quot;[СИСТЕМА] Ласкаво просимо, {username}!&quot;.encode('utf-8')) # Привітання</span>
+<span class="s4">#</span>
+<span class="s4">#                 elif message.startswith(&quot;LEAVE@&quot;):</span>
+<span class="s4">#                     username_leaving = message.split(&quot;@&quot;, 1)[1]</span>
+<span class="s4">#                     leave_msg = f&quot;[СИСТЕМА] {username_leaving} покинув(ла) чат.&quot;</span>
+<span class="s4">#                     self.broadcast_message(leave_msg.encode('utf-8'), client_sock) # Повідомити інших</span>
+<span class="s4">#                     break # Клієнт повідомив про вихід</span>
+<span class="s4">#</span>
+<span class="s4">#                 else:</span>
+<span class="s4">#                     # Припускаємо, що це звичайне повідомлення чату</span>
+<span class="s4">#                     # Клієнт вже надсилає його як &quot;Нік: Повідомлення&quot;</span>
+<span class="s4">#                     # Тому сервер просто розсилає його</span>
+<span class="s4">#                     self.broadcast_message(message.encode('utf-8'), client_sock)</span>
+<span class="s4">#</span>
+<span class="s4">#         except socket_error as e:</span>
+<span class="s4">#             print(f&quot;Помилка сокета для {client_address} ({username}): {e}&quot;)</span>
+<span class="s4">#         except Exception as e:</span>
+<span class="s4">#             print(f&quot;Неочікувана помилка для {client_address} ({username}): {e}&quot;)</span>
+<span class="s4">#         finally:</span>
+<span class="s4">#             self.remove_client(client_sock, username)</span>
+<span class="s4">#</span>
+<span class="s4">#     def broadcast_message(self, message_bytes, sender_sock=None):</span>
+<span class="s4">#         &quot;&quot;&quot;Надсилає байти повідомлення всім підключеним клієнтам, крім відправника.&quot;&quot;&quot;</span>
+<span class="s4">#         with self.lock:</span>
+<span class="s4">#             clients_to_remove = []</span>
+<span class="s4">#             for client_socket, client_username in list(self.clients.items()):</span>
+<span class="s4">#                 if client_socket != sender_sock:</span>
+<span class="s4">#                     try:</span>
+<span class="s4">#                         client_socket.send(message_bytes)</span>
+<span class="s4">#                     except socket_error as e:</span>
+<span class="s4">#                         print(f&quot;Помилка надсилання повідомлення клієнту {client_username} ({client_socket.getpeername()}): {e}&quot;)</span>
+<span class="s4">#                         clients_to_remove.append(client_socket)</span>
+<span class="s4">#                     except Exception as e:</span>
+<span class="s4">#                         print(f&quot;Неочікувана помилка надсилання клієнту {client_username} ({client_socket.getpeername()}): {e}&quot;)</span>
+<span class="s4">#                         clients_to_remove.append(client_socket)</span>
+<span class="s4">#             for client_socket in clients_to_remove:</span>
+<span class="s4">#                 self.remove_client(client_socket, self.clients.get(client_socket, &quot;Unknown&quot;))</span>
+<span class="s4">#</span>
+<span class="s4">#     def remove_client(self, client_sock, username):</span>
+<span class="s4">#         with self.lock:</span>
+<span class="s4">#             if client_sock in self.clients:</span>
+<span class="s4">#                 del self.clients[client_sock]</span>
+<span class="s4">#                 print(f&quot;Клієнт {username} ({client_sock.getpeername()}) відключився.&quot;)</span>
+<span class="s4">#                 try:</span>
+<span class="s4">#                     client_sock.close()</span>
+<span class="s4">#                 except socket_error as e:</span>
+<span class="s4">#                     print(f&quot;Помилка закриття сокета клієнта {username}: {e}&quot;)</span>
+<span class="s4">#                 except Exception as e:</span>
+<span class="s4">#                     print(f&quot;Неочікувана помилка закриття сокета клієнта {username}: {e}&quot;)</span>
+<span class="s4">#                 if not username.startswith(&quot;Unknown&quot;):</span>
+<span class="s4">#                     # Відправляємо системне повідомлення про вихід</span>
+<span class="s4">#                     leave_msg_for_others = f&quot;[СИСТЕМА] {username} відключився(лась).&quot;</span>
+<span class="s4">#                     self.broadcast_message(leave_msg_for_others.encode('utf-8'))</span>
+<span class="s4">#</span>
+<span class="s4">#</span>
+<span class="s4"># # --- Головна частина програми ---</span>
+<span class="s4"># if __name__ == &quot;__main__&quot;:</span>
+<span class="s4">#     # Приклад запуску сервера (якщо це окремий файл сервера)</span>
+<span class="s4">#     server = ChatServer()</span>
+<span class="s4">#     server.start()</span>
+<span class="s4">#     while True:</span>
+<span class="s4">#         time.sleep(1) # Тримаємо сервер активним</span>
+
+<span class="s4"># --- Головна частина програми (запуск КЛІЄНТА) ---</span>
+<span class="s0">if </span><span class="s1">__name__ </span><span class="s2">== </span><span class="s3">&quot;__main__&quot;</span><span class="s2">:</span>
+    <span class="s1">client </span><span class="s2">= </span><span class="s1">ChatClient</span><span class="s2">()</span>
+    <span class="s1">client</span><span class="s2">.</span><span class="s1">launch_login_window</span><span class="s2">()</span>
+
+
+
+</pre>
+</body>
+</html>
